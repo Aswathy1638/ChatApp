@@ -9,6 +9,8 @@ using ChatApp.Data;
 using ChatApp.Models;
 using Microsoft.CodeAnalysis.Scripting;
 using static ChatApp.Models.RegisterUser;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ChatApp.Controllers
 {
@@ -97,55 +99,44 @@ namespace ChatApp.Controllers
 
             return CreatedAtAction("GetUser", new { id = user.Id }, user);
         }
-        private readonly Dictionary<string, UserRegistrationRequest> _users = new Dictionary<string, UserRegistrationRequest>();
-
+        
         [HttpPost("/api/register")]
-        public IActionResult RegisterUser(UserRegistrationRequest request)
+       
+        public async Task<ActionResult<User>> RegisterUser(RegisterUser request)
         {
-            // Validate the request
-            if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Name) || string.IsNullOrEmpty(request.Password))
+            if (_context.User.Any(u => u.Email == request.Email))
             {
-                return BadRequest(new UserRegistrationErrorResponse { Error = "All fields are required." });
+                return Conflict(new { error = "Email is already registered." });
             }
 
-            // Check if the email is already registered
-            if (_users.ContainsKey(request.Email))
+            var newUser = new User
             {
-                return Conflict(new UserRegistrationErrorResponse { Error = "Email is already registered." });
-            }
-
-            // Hash the password securely before storing it
-            string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
-
-            // Generate a unique user ID (you can implement your own logic here)
-            int userId = GenerateUserId();
-
-            // Save the user details (in this example, we'll use the email as the key)
-            _users[request.Email] = new UserRegistrationRequest
-            {
-                Email = request.Email,
-                Name = request.Name,
-                Password = hashedPassword
+                Password = request.Password,
+                // Generate and set the authentication token for the user
+                
             };
 
-            // Return the success response
-            var response = new UserRegistrationResponse
+            _context.User.Add(newUser);
+            await _context.SaveChangesAsync();
+
+            // Do not include the password in the response body
+            var responseUser = new
             {
-                UserId = userId,
+                UserId = newUser.Id,
                 Name = request.Name,
                 Email = request.Email
             };
 
-            return Ok(response);
+            return CreatedAtAction("GetUser", new { id = newUser.Id }, responseUser);
         }
 
-        private int GenerateUserId()
+        private string GenerateAuthToken()
         {
-            // Implement your own logic to generate a unique user ID (database auto-increment, GUID, etc.)
-            // For simplicity, we'll just use a random number generator here.
-            Random random = new Random();
-            return random.Next(1000, 10000);
+            // Implement a method to generate a unique authentication token for the user
+            // For example, you can use a GUID or any other secure method.
+            return Guid.NewGuid().ToString();
         }
+
 
         // DELETE: api/Users/5
         [HttpDelete("{id}")]
