@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ChatApp.Data;
 using ChatApp.Models;
+using Microsoft.CodeAnalysis.Scripting;
+using static ChatApp.Models.RegisterUser;
 
 namespace ChatApp.Controllers
 {
@@ -94,6 +96,55 @@ namespace ChatApp.Controllers
             await _context.SaveChangesAsync();
 
             return CreatedAtAction("GetUser", new { id = user.Id }, user);
+        }
+        private readonly Dictionary<string, UserRegistrationRequest> _users = new Dictionary<string, UserRegistrationRequest>();
+
+        [HttpPost("/api/register")]
+        public IActionResult RegisterUser(UserRegistrationRequest request)
+        {
+            // Validate the request
+            if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Name) || string.IsNullOrEmpty(request.Password))
+            {
+                return BadRequest(new UserRegistrationErrorResponse { Error = "All fields are required." });
+            }
+
+            // Check if the email is already registered
+            if (_users.ContainsKey(request.Email))
+            {
+                return Conflict(new UserRegistrationErrorResponse { Error = "Email is already registered." });
+            }
+
+            // Hash the password securely before storing it
+            string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
+
+            // Generate a unique user ID (you can implement your own logic here)
+            int userId = GenerateUserId();
+
+            // Save the user details (in this example, we'll use the email as the key)
+            _users[request.Email] = new UserRegistrationRequest
+            {
+                Email = request.Email,
+                Name = request.Name,
+                Password = hashedPassword
+            };
+
+            // Return the success response
+            var response = new UserRegistrationResponse
+            {
+                UserId = userId,
+                Name = request.Name,
+                Email = request.Email
+            };
+
+            return Ok(response);
+        }
+
+        private int GenerateUserId()
+        {
+            // Implement your own logic to generate a unique user ID (database auto-increment, GUID, etc.)
+            // For simplicity, we'll just use a random number generator here.
+            Random random = new Random();
+            return random.Next(1000, 10000);
         }
 
         // DELETE: api/Users/5
